@@ -1,10 +1,19 @@
 import express from 'express';
-import { devices, toDeviceResponse } from './device-store.js';
+import { now } from './clock.js';
+import {
+  getConnectivityStatus,
+  getDevice,
+  getDeviceCount,
+  getDevices,
+  recordHeartbeat,
+  registerDevice,
+  toDeviceResponse,
+} from './device-store.js';
 
 const app = express();
 
 app.use((req, res, next) => {
-  req.receivedAt = Date.now();
+  req.receivedAt = now();
   next();
 });
 
@@ -20,6 +29,12 @@ function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isIso8601DateTime(value) {
+  return typeof value === 'string'
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/i.test(value)
+    && !Number.isNaN(Date.parse(value));
+}
+
 app.post('/devices', (req, res) => {
   if (!isObject(req.body)) {
     return sendError(res, 400, 'INVALID_REQUEST', 'Request body must be a JSON object.');
@@ -32,18 +47,10 @@ app.post('/devices', (req, res) => {
     return sendError(res, 400, 'INVALID_DEVICE', 'Device id and name are required.');
   }
 
-  if (devices.has(id)) {
+  const device = registerDevice(id, name);
+  if (!device) {
     return sendError(res, 409, 'DEVICE_EXISTS', `Device '${id}' is already registered.`);
   }
-
-  const device = {
-    id,
-    name,
-    lastHeartbeat: null,
-    lastHeartbeatReceivedAt: null,
-  };
-
-  devices.set(id, device);
   return res.status(201).json({
     id: device.id,
     name: device.name,
@@ -53,7 +60,7 @@ app.post('/devices', (req, res) => {
 });
 
 app.post('/devices/:id/heartbeat', (req, res) => {
-  const device = devices.get(req.params.id);
+  const device = getDevice(req.params.id);
 
   if (!device) {
     return sendError(res, 404, 'DEVICE_NOT_FOUND', `Device '${req.params.id}' is not registered.`);
@@ -64,10 +71,9 @@ app.post('/devices/:id/heartbeat', (req, res) => {
   }
 
   const { timestamp, status } = req.body;
-  const parsedTimestamp = typeof timestamp === 'string' ? Date.parse(timestamp) : Number.NaN;
-  const heartbeatStatus = typeof status === 'string' ? status.trim() : '';
+  const heartbeatStatus = typeof status === 'string' ? status : '';
 
-  if (Number.isNaN(parsedTimestamp) || !heartbeatStatus) {
+  if (!isIso8601DateTime(timestamp) || !heartbeatStatus.trim()) {
     return sendError(
       res,
       400,
@@ -76,22 +82,23 @@ app.post('/devices/:id/heartbeat', (req, res) => {
     );
   }
 
-  device.lastHeartbeat = {
-    timestamp: new Date(parsedTimestamp).toISOString(),
-    status: heartbeatStatus,
-  };
-  device.lastHeartbeatReceivedAt = req.receivedAt;
+  recordHeartbeat(device, timestamp, heartbeatStatus, req.receivedAt);
 
-  return res.status(200).json(toDeviceResponse(device, req.receivedAt));
+  return res.status(200).json({
+    id: device.id,
+    name: device.name,
+    status: getConnectivityStatus(device, now()),
+    last_heartbeat: device.lastHeartbeat.timestamp,
+  });
 });
 
 app.get('/devices', (req, res) => {
-  const now = Date.now();
-  return res.json(Array.from(devices.values(), (device) => toDeviceResponse(device, now)));
+  const currentTime = now();
+  return res.json(getDevices().map((device) => toDeviceResponse(device, currentTime)));
 });
 
 app.get('/devices/:id', (req, res) => {
-  const device = devices.get(req.params.id);
+  const device = getDevice(req.params.id);
 
   if (!device) {
     return sendError(res, 404, 'DEVICE_NOT_FOUND', `Device '${req.params.id}' is not registered.`);
@@ -101,16 +108,16 @@ app.get('/devices/:id', (req, res) => {
 });
 
 app.get('/summary', (req, res) => {
-  const now = Date.now();
+  const currentTime = now();
   let online = 0;
 
-  for (const device of devices.values()) {
-    if (toDeviceResponse(device, now).status === 'ONLINE') {
+  for (const device of getDevices()) {
+    if (toDeviceResponse(device, currentTime).status === 'ONLINE') {
       online += 1;
     }
   }
 
-  const total = devices.size;
+  const total = getDeviceCount();
   return res.json({
     total,
     online,
