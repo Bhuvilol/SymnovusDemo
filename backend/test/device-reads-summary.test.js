@@ -60,4 +60,6 @@ test('device reads expose public fields and summary derives dynamic fleet counts
 
   const unknown = await requestJson(baseUrl, 'GET', '/devices/not-registered');
   assert.equal(unknown.status, 404);
+  assert.equal(typeof unknown.body.error.code, 'string');
+  assert.equal(typeof unknown.body.error.message, 'string');
 });

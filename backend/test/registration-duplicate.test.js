@@ -10,6 +10,8 @@ test('duplicate registration returns conflict without overwriting the device', a
 
   assert.equal(first.status, 201);
   assert.equal(duplicate.status, 409);
+  assert.equal(typeof duplicate.body.error.code, 'string');
+  assert.equal(typeof duplicate.body.error.message, 'string');
   assert.deepEqual(existing.body, {
     id: 'device-01',
     name: 'Lab Device 01',

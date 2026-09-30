@@ -21,6 +21,7 @@ test('invalid or missing registration fields return a JSON 400 error', async (t)
 
   for (const response of [invalidId, invalidName, missingId, missingName]) {
     assert.equal(response.status, 400);
+    assert.equal(typeof response.body.error.code, 'string');
     assert.equal(typeof response.body.error.message, 'string');
   }
 });
