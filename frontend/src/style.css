@@ -14,7 +14,8 @@
   --paper: #ffffff;
   --accent: #176b56;
   --accent-soft: #e8f2ee;
-  --offline: #616864;
+  --offline: #8a2d2d;
+  --offline-soft: #f8eeee;
 }
 
 * {
@@ -27,8 +28,7 @@ body {
   margin: 0;
 }
 
-button,
-input {
+button {
   font: inherit;
 }
 
@@ -53,6 +53,27 @@ button:disabled {
   justify-content: space-between;
   gap: 32px;
   margin-bottom: 44px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.live-clock {
+  display: grid;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-align: right;
+}
+
+.live-clock time {
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .eyebrow {
@@ -262,6 +283,8 @@ tbody tr:last-child td {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  padding: 5px 8px;
+  border-radius: 4px;
   font-size: 0.77rem;
   font-weight: 700;
   letter-spacing: 0.035em;
@@ -269,10 +292,12 @@ tbody tr:last-child td {
 
 .status-label--online {
   color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .status-label--offline {
   color: var(--offline);
+  background: var(--offline-soft);
 }
 
 .status-dot {
@@ -301,40 +326,7 @@ tbody tr:last-child td {
 }
 
 .register-form {
-  display: grid;
-  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1.2fr) auto;
-  align-items: end;
-  gap: 16px;
-}
-
-.field {
-  display: grid;
-  gap: 8px;
-}
-
-.field label {
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.field input {
-  width: 100%;
-  height: 44px;
-  padding: 0 12px;
-  border: 1px solid #bfc7c2;
-  border-radius: 4px;
-  outline: none;
-  color: var(--ink);
-  background: var(--paper);
-}
-
-.field input::placeholder {
-  color: #6a716d;
-}
-
-.field input:focus-visible {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
+  display: flex;
 }
 
 .form-message {
@@ -344,6 +336,88 @@ tbody tr:last-child td {
 
 .form-message--success {
   color: var(--accent);
+}
+
+.simulator-section {
+  margin-top: 48px;
+  padding-top: 27px;
+  border-top: 1px solid var(--line);
+}
+
+.simulator-heading {
+  align-items: center;
+}
+
+.simulator-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.simulator-list {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.simulator-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 70px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.simulator-device {
+  display: grid;
+  grid-template-columns: 110px minmax(130px, 1fr) 86px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+
+.simulator-name {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.simulator-empty {
+  padding: 22px 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.simulator-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  color: var(--offline);
+  background: var(--offline-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.simulator-state::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
+}
+
+.simulator-state--running {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.simulator-error {
+  color: #8a2d2d;
+  font-size: 0.82rem;
 }
 
 @media (max-width: 680px) {
@@ -357,6 +431,15 @@ tbody tr:last-child td {
     flex-direction: column;
     gap: 20px;
     margin-bottom: 32px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .live-clock {
+    text-align: left;
   }
 
   .summary-section {
@@ -386,11 +469,21 @@ tbody tr:last-child td {
     padding-left: 12px;
   }
 
-  .register-form {
-    grid-template-columns: 1fr;
+  .simulator-heading,
+  .simulator-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
-  .register-form .button {
-    justify-self: start;
+  .simulator-actions {
+    flex-wrap: wrap;
+  }
+
+  .simulator-device {
+    grid-template-columns: auto auto;
+  }
+
+  .simulator-error {
+    grid-column: 1 / -1;
   }
 }

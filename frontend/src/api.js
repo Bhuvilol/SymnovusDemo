@@ -41,3 +41,14 @@ export function registerDevice(device) {
     body: JSON.stringify(device),
   });
 }
+
+export function sendHeartbeat(deviceId) {
+  return requestJson(`/devices/${encodeURIComponent(deviceId)}/heartbeat`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      timestamp: new Date().toISOString(),
+      status: 'OK',
+    }),
+  });
+}

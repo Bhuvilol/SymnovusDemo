@@ -1,11 +1,11 @@
 # Mini Device Fleet Monitor
 
-A small fleet monitoring application. Registered devices periodically send heartbeats to an Express backend. The backend determines whether each device is `ONLINE` or `OFFLINE` from when it received the heartbeat, and the React dashboard displays the current fleet state. A Node.js simulator generates heartbeat traffic for five devices.
+A small fleet monitoring application. Registered devices periodically send heartbeats to an Express backend. The backend determines whether each device is `ONLINE` or `OFFLINE` from when it received the heartbeat, and the React dashboard displays the current fleet state. The dashboard can simulate heartbeats for registered devices, and a Node.js command-line simulator is also available.
 
 ## Architecture
 
 ```text
-React Dashboard
+React Dashboard + Browser Simulator
        |
        v
 Express Backend
@@ -13,7 +13,7 @@ Express Backend
        v
 In-Memory Device Store
 
-Simulator ---> Express Backend
+CLI Simulator ---> Express Backend
 ```
 
 - **Backend:** Node.js and Express
@@ -66,9 +66,9 @@ Open the dashboard at <http://localhost:5173/>. The backend listens at <http://l
 
 ## Simulator
 
-The simulator assumes `device-01` through `device-05` have already been registered through the dashboard or API. It does not register them. Each device sends a heartbeat immediately and then every five seconds.
+The browser simulator lists every device registered with the backend. Use **Add device** to create the next sequential device (for example, `device-06`, then `device-07`); its name is filled in automatically. New devices appear in the simulator list after registration. Use **Start all** or an individual **Start** button to send an immediate heartbeat and continue every five seconds. **Stop** pauses that device's heartbeats, and **Stop all** pauses every browser simulation. A stopped device becomes `OFFLINE` after the backend's 30-second timeout; starting it again sends a fresh heartbeat. Keep the dashboard open while simulating; browser heartbeats stop when the page is closed.
 
-Start it from the repository root:
+The command-line simulator is also available and continues to simulate the five default IDs, `device-01` through `device-05`. Register these devices first if they are not already in the fleet. Start the CLI from the repository root:
 
 ```bash
 npm run simulator
@@ -143,7 +143,7 @@ Returns counts calculated from the current device state:
 
 ## Dashboard behavior
 
-The dashboard shows fleet summary counts and the device list, including each device's latest heartbeat. It supports device registration and manual refresh, and polls the backend every five seconds. It displays backend-provided status and shows errors when API requests fail.
+The dashboard shows fleet summary counts and the device list, including each device's latest heartbeat. It supports automatic device registration, manual refresh, and browser simulator controls for all registered devices. A local clock at the top updates every second as a tester aid; it does not determine device status. The dashboard polls the backend every five seconds and displays backend-provided status and errors when API requests fail.
 
 ## Tests and build
 
@@ -166,7 +166,7 @@ npm run build:frontend
 - In-memory storage is intentional; restarting the backend clears all registered devices and heartbeat state.
 - State is local to one backend process and is not shared across multiple instances.
 - Authentication and authorization are not implemented.
-- Local defaults are fixed for this assessment: backend port `3000`, Vite dashboard port `5173`, and five simulator device IDs. The backend port can be overridden with `PORT`.
+- Local defaults are fixed for this assessment: backend port `3000`, Vite dashboard port `5173`, and five command-line simulator device IDs. Browser simulator controls use all registered devices. The backend port can be overridden with `PORT`.
 - A simulator device must be registered before its heartbeat can succeed.
 - The heartbeat `status` is device-reported information; it is separate from fleet connectivity status.
 - There is no production deployment configuration.

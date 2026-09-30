@@ -1,9 +1,28 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { fetchFleet, registerDevice } from './api.js';
+import { fetchFleet, registerDevice, sendHeartbeat } from './api.js';
 import './style.css';
 
 const POLL_INTERVAL_MS = 5_000;
+const HEARTBEAT_INTERVAL_MS = 5_000;
+
+function getNextDevice(devices) {
+  const usedIds = new Set(devices.map((device) => device.id));
+  const usedNumbers = devices
+    .map((device) => /^device-(\d+)$/i.exec(device.id)?.[1])
+    .filter(Boolean)
+    .map(Number);
+  let number = Math.max(0, ...usedNumbers) + 1;
+  let id = `device-${String(number).padStart(2, '0')}`;
+
+  while (usedIds.has(id)) {
+    number += 1;
+    id = `device-${String(number).padStart(2, '0')}`;
+  }
+
+  const suffix = String(number).padStart(2, '0');
+  return { id, name: `Lab Device ${suffix}` };
+}
 
 function formatHeartbeat(timestamp) {
   if (!timestamp) return 'Never';
@@ -33,11 +52,15 @@ function App() {
   const [summary, setSummary] = useState(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
   const [pageError, setPageError] = useState('');
   const [registrationError, setRegistrationError] = useState('');
   const [notice, setNotice] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
-  const [form, setForm] = useState({ id: '', name: '' });
+  const [runningSimulators, setRunningSimulators] = useState({});
+  const [simulatorErrors, setSimulatorErrors] = useState({});
+  const simulatorTimers = useRef(new Map());
+  const heartbeatRequests = useRef(new Set());
 
   const refreshFleet = useCallback(async () => {
     setIsRefreshing(true);
@@ -60,27 +83,95 @@ function App() {
   useEffect(() => {
     void refreshFleet();
     const interval = window.setInterval(() => void refreshFleet(), POLL_INTERVAL_MS);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearInterval(interval);
+      for (const timer of simulatorTimers.current.values()) {
+        window.clearInterval(timer);
+      }
+      simulatorTimers.current.clear();
+    };
   }, [refreshFleet]);
 
-  async function handleSubmit(event) {
-    event.preventDefault();
+  useEffect(() => {
+    const interval = window.setInterval(() => setCurrentTime(new Date()), 1_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const sendSimulatedHeartbeat = useCallback(async (deviceId) => {
+    if (heartbeatRequests.current.has(deviceId)) return;
+
+    heartbeatRequests.current.add(deviceId);
+    try {
+      await sendHeartbeat(deviceId);
+      setSimulatorErrors((current) => ({ ...current, [deviceId]: '' }));
+    } catch (error) {
+      const message = error.status === 404
+        ? `${deviceId} is not registered. Register it here; retries continue every 5 seconds.`
+        : error.message;
+      setSimulatorErrors((current) => ({ ...current, [deviceId]: message }));
+    } finally {
+      heartbeatRequests.current.delete(deviceId);
+    }
+  }, []);
+
+  function startSimulator(deviceId) {
+    if (simulatorTimers.current.has(deviceId)) return;
+
+    setRunningSimulators((current) => ({ ...current, [deviceId]: true }));
+    void sendSimulatedHeartbeat(deviceId);
+    const timer = window.setInterval(
+      () => void sendSimulatedHeartbeat(deviceId),
+      HEARTBEAT_INTERVAL_MS,
+    );
+    simulatorTimers.current.set(deviceId, timer);
+  }
+
+  function stopSimulator(deviceId) {
+    const timer = simulatorTimers.current.get(deviceId);
+    if (timer === undefined) return;
+
+    window.clearInterval(timer);
+    simulatorTimers.current.delete(deviceId);
+    setRunningSimulators((current) => ({ ...current, [deviceId]: false }));
+  }
+
+  function startAllSimulators() {
+    devices.forEach((device) => startSimulator(device.id));
+  }
+
+  function stopAllSimulators() {
+    for (const deviceId of simulatorTimers.current.keys()) {
+      stopSimulator(deviceId);
+    }
+  }
+
+  async function handleAddDevice() {
     setRegistrationError('');
     setNotice('');
-
-    if (!form.id.trim() || !form.name.trim()) {
-      setRegistrationError('Enter both a device ID and a device name.');
-      return;
-    }
-
     setIsRegistering(true);
+
     try {
-      await registerDevice({ id: form.id, name: form.name });
-      setForm({ id: '', name: '' });
-      setNotice(`${form.id} was registered.`);
+      let fleet = await fetchFleet();
+      setDevices(fleet.devices);
+      setSummary(fleet.summary);
+
+      let device = getNextDevice(fleet.devices);
+      try {
+        await registerDevice(device);
+      } catch (error) {
+        if (error.status !== 409) throw error;
+
+        fleet = await fetchFleet();
+        setDevices(fleet.devices);
+        setSummary(fleet.summary);
+        device = getNextDevice(fleet.devices);
+        await registerDevice(device);
+      }
+
+      setNotice(`${device.name} added (${device.id}).`);
       await refreshFleet();
     } catch (error) {
-      setRegistrationError(error.status === 409 ? 'Device already exists.' : error.message);
+      setRegistrationError(error.message);
     } finally {
       setIsRegistering(false);
     }
@@ -94,9 +185,19 @@ function App() {
           <h1>Fleet monitor</h1>
           <p className="page-description">A live view of registered devices and their heartbeat status.</p>
         </div>
-        <button className="button button--secondary" type="button" onClick={() => void refreshFleet()} disabled={isRefreshing}>
-          {isRefreshing ? 'Refreshing…' : 'Refresh'}
-        </button>
+        <div className="header-actions">
+          <div className="live-clock" aria-label="Local time">
+            <span>Local time</span>
+            <time>{new Intl.DateTimeFormat(undefined, {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            }).format(currentTime)}</time>
+          </div>
+          <button className="button button--secondary" type="button" onClick={() => void refreshFleet()} disabled={isRefreshing}>
+            {isRefreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
       </header>
 
       {pageError && (
@@ -158,41 +259,61 @@ function App() {
       <section className="register-section" aria-labelledby="register-heading">
         <div className="section-heading">
           <div>
-            <h2 id="register-heading">Register a device</h2>
-            <p>New devices start offline until their first heartbeat.</p>
+            <h2 id="register-heading">Add a device</h2>
+            <p>Adds the next available device ID and name automatically. New devices start offline until their first heartbeat.</p>
           </div>
         </div>
 
-        <form className="register-form" onSubmit={handleSubmit}>
-          <div className="field">
-            <label htmlFor="device-id">Device ID</label>
-            <input
-              id="device-id"
-              name="id"
-              value={form.id}
-              onChange={(event) => setForm((current) => ({ ...current, id: event.target.value }))}
-              placeholder="device-06"
-              autoComplete="off"
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="device-name">Device name</label>
-            <input
-              id="device-name"
-              name="name"
-              value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Lab Device 06"
-              required
-            />
-          </div>
-          <button className="button button--primary" type="submit" disabled={isRegistering}>
-            {isRegistering ? 'Registering…' : 'Register'}
+        <div className="register-form">
+          <button className="button button--primary" type="button" onClick={() => void handleAddDevice()} disabled={isRegistering}>
+            {isRegistering ? 'Adding…' : 'Add device'}
           </button>
-        </form>
+        </div>
         {registrationError && <p className="form-message form-message--error" role="alert">{registrationError}</p>}
         {notice && <p className="form-message form-message--success" role="status">{notice}</p>}
+      </section>
+
+      <section className="simulator-section" aria-labelledby="simulator-heading">
+        <div className="section-heading simulator-heading">
+          <div>
+            <h2 id="simulator-heading">Browser simulator</h2>
+            <p>Lists all registered devices. Heartbeats send immediately, then every 5 seconds.</p>
+          </div>
+          <div className="simulator-actions">
+            <button className="button button--primary" type="button" onClick={startAllSimulators} disabled={devices.length === 0}>Start all</button>
+            <button className="button button--secondary" type="button" onClick={stopAllSimulators} disabled={!Object.values(runningSimulators).some(Boolean)}>Stop all</button>
+          </div>
+        </div>
+
+        <ul className="simulator-list">
+          {devices.length === 0 && <li className="simulator-empty">Add a device to start simulating heartbeats.</li>}
+          {devices.map((device) => {
+            const deviceId = device.id;
+            const isRunning = Boolean(runningSimulators[deviceId]);
+            return (
+              <li className="simulator-row" key={deviceId}>
+                <div className="simulator-device">
+                  <span className="device-id">{deviceId}</span>
+                  <span className="simulator-name">{device.name}</span>
+                  <span className={`simulator-state ${isRunning ? 'simulator-state--running' : ''}`}>
+                    {isRunning ? 'RUNNING' : 'STOPPED'}
+                  </span>
+                  {simulatorErrors[deviceId] && (
+                    <span className="simulator-error" role="status">{simulatorErrors[deviceId]}</span>
+                  )}
+                </div>
+                <button
+                  className="button button--secondary"
+                  type="button"
+                  onClick={() => (isRunning ? stopSimulator(deviceId) : startSimulator(deviceId))}
+                  aria-label={`${isRunning ? 'Stop' : 'Start'} heartbeat simulator for ${deviceId}`}
+                >
+                  {isRunning ? 'Stop' : 'Start'} {deviceId}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       </section>
     </main>
   );
