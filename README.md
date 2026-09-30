@@ -55,14 +55,25 @@ npm install
 
 ## Run the application
 
-Run each command in a separate terminal from the repository root:
+After `npm install`, open two terminals in the repository root and leave both running.
+
+**Terminal 1 — backend:**
 
 ```bash
 npm run dev:backend
+```
+
+The backend listens at <http://localhost:3000/> by default.
+
+**Terminal 2 — dashboard:**
+
+```bash
 npm run dev:frontend
 ```
 
-Open the dashboard at <http://localhost:5173/>. The backend listens at <http://localhost:3000/> by default. The Vite development server proxies the dashboard's API requests to that backend.
+Open <http://localhost:5173/> in your browser. The Vite development server proxies the dashboard's API requests to the backend.
+
+On first run the fleet is empty. Click **Add device** in the dashboard to register `device-01`; click it again to add the next sequential device. To simulate heartbeats, use **Start** or **Start all** in the browser simulator section. You can also use the command-line simulator described below.
 
 ## Simulator
 
