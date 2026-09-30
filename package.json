@@ -15,6 +15,7 @@
     "dev:backend": "npm run dev --workspace @fleet/backend",
     "dev:frontend": "npm run dev --workspace @fleet/frontend",
     "build:frontend": "npm run build --workspace @fleet/frontend",
+    "simulator": "npm run start --workspace @fleet/simulator",
     "test": "node --test"
   }
 }

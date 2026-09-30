@@ -30,7 +30,13 @@ Run `npm test`. No automated tests have been written yet; the project uses Node.
 
 ## Simulator
 
-Placeholder. The simulator has not been implemented yet, so there is no simulator command at this stage.
+Register `device-01` through `device-05` with the backend before starting the simulator. It sends heartbeats immediately and every five seconds; unregistered devices are not registered automatically.
+
+```sh
+npm run simulator
+```
+
+Available commands: `stop <device-id>`, `start <device-id>`, `status`, and `exit`. Press Ctrl+C to stop the simulator.
 
 ## API
 
