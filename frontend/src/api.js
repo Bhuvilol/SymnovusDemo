@@ -42,6 +42,10 @@ export function registerDevice(device) {
   });
 }
 
+export function removeDevice(deviceId) {
+  return requestJson(`/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' });
+}
+
 export function sendHeartbeat(deviceId) {
   return requestJson(`/devices/${encodeURIComponent(deviceId)}/heartbeat`, {
     method: 'POST',

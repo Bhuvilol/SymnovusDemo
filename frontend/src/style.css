@@ -134,6 +134,26 @@ h1 {
   border-color: var(--ink);
 }
 
+.button--compact {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 0.82rem;
+}
+
+.button--danger:hover:not(:disabled) {
+  color: var(--offline);
+  border-color: var(--offline);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .message {
   display: flex;
   align-items: center;
@@ -225,6 +245,7 @@ h2 {
 }
 
 .table-wrap {
+  position: relative;
   overflow-x: auto;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
@@ -263,6 +284,10 @@ th {
 
 td {
   font-size: 0.9rem;
+}
+
+.row-actions {
+  text-align: right;
 }
 
 tbody tr:last-child td {

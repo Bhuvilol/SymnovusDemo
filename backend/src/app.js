@@ -3,10 +3,10 @@ import { now } from './clock.js';
 import {
   getConnectivityStatus,
   getDevice,
-  getDeviceCount,
   getDevices,
   recordHeartbeat,
   registerDevice,
+  removeDevice,
   toDeviceResponse,
 } from './device-store.js';
 
@@ -35,7 +35,7 @@ function isIso8601DateTime(value) {
     && !Number.isNaN(Date.parse(value));
 }
 
-app.post('/devices', (req, res) => {
+app.post('/devices', async (req, res) => {
   if (!isObject(req.body)) {
     return sendError(res, 400, 'INVALID_REQUEST', 'Request body must be a JSON object.');
   }
@@ -47,7 +47,7 @@ app.post('/devices', (req, res) => {
     return sendError(res, 400, 'INVALID_DEVICE', 'Device id and name are required.');
   }
 
-  const device = registerDevice(id, name);
+  const device = await registerDevice(id, name);
   if (!device) {
     return sendError(res, 409, 'DEVICE_EXISTS', `Device '${id}' is already registered.`);
   }
@@ -59,8 +59,8 @@ app.post('/devices', (req, res) => {
   });
 });
 
-app.post('/devices/:id/heartbeat', (req, res) => {
-  const device = getDevice(req.params.id);
+app.post('/devices/:id/heartbeat', async (req, res) => {
+  const device = await getDevice(req.params.id);
 
   if (!device) {
     return sendError(res, 404, 'DEVICE_NOT_FOUND', `Device '${req.params.id}' is not registered.`);
@@ -82,23 +82,27 @@ app.post('/devices/:id/heartbeat', (req, res) => {
     );
   }
 
-  recordHeartbeat(device, timestamp, heartbeatStatus, req.receivedAt);
+  const updated = await recordHeartbeat(device, timestamp, heartbeatStatus, req.receivedAt);
+  if (!updated) {
+    return sendError(res, 404, 'DEVICE_NOT_FOUND', `Device '${req.params.id}' is not registered.`);
+  }
 
   return res.status(200).json({
-    id: device.id,
-    name: device.name,
-    status: getConnectivityStatus(device, now()),
-    last_heartbeat: device.lastHeartbeat.timestamp,
+    id: updated.id,
+    name: updated.name,
+    status: getConnectivityStatus(updated, now()),
+    last_heartbeat: updated.lastHeartbeat.timestamp,
   });
 });
 
-app.get('/devices', (req, res) => {
+app.get('/devices', async (req, res) => {
   const currentTime = now();
-  return res.json(getDevices().map((device) => toDeviceResponse(device, currentTime)));
+  const devices = await getDevices();
+  return res.json(devices.map((device) => toDeviceResponse(device, currentTime)));
 });
 
-app.get('/devices/:id', (req, res) => {
-  const device = getDevice(req.params.id);
+app.get('/devices/:id', async (req, res) => {
+  const device = await getDevice(req.params.id);
 
   if (!device) {
     return sendError(res, 404, 'DEVICE_NOT_FOUND', `Device '${req.params.id}' is not registered.`);
@@ -107,17 +111,28 @@ app.get('/devices/:id', (req, res) => {
   return res.json(toDeviceResponse(device));
 });
 
-app.get('/summary', (req, res) => {
+app.delete('/devices/:id', async (req, res) => {
+  const removed = await removeDevice(req.params.id);
+
+  if (!removed) {
+    return sendError(res, 404, 'DEVICE_NOT_FOUND', `Device '${req.params.id}' is not registered.`);
+  }
+
+  return res.status(204).end();
+});
+
+app.get('/summary', async (req, res) => {
   const currentTime = now();
+  const devices = await getDevices();
   let online = 0;
 
-  for (const device of getDevices()) {
+  for (const device of devices) {
     if (toDeviceResponse(device, currentTime).status === 'ONLINE') {
       online += 1;
     }
   }
 
-  const total = getDeviceCount();
+  const total = devices.length;
   return res.json({
     total,
     online,

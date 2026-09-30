@@ -1,41 +1,30 @@
 import { now } from './clock.js';
-
-const devices = new Map();
+import { createMemoryStore } from './memory-store.js';
+import { createRedisStore } from './redis-store.js';
 
 const HEARTBEAT_TIMEOUT_MS = 30_000;
 
+// Redis when deployed with credentials; in-memory for local development and tests.
+const store = createRedisStore() ?? createMemoryStore();
+
 export function getDevice(id) {
-  return devices.get(id);
+  return store.getDevice(id);
 }
 
 export function getDevices() {
-  return Array.from(devices.values());
-}
-
-export function getDeviceCount() {
-  return devices.size;
+  return store.getDevices();
 }
 
 export function registerDevice(id, name) {
-  if (devices.has(id)) {
-    return null;
-  }
+  return store.registerDevice(id, name);
+}
 
-  const device = {
-    id,
-    name,
-    lastHeartbeat: null,
-    lastHeartbeatReceivedAt: null,
-  };
-
-  devices.set(id, device);
-  return device;
+export function removeDevice(id) {
+  return store.removeDevice(id);
 }
 
 export function recordHeartbeat(device, timestamp, status, receivedAt = now()) {
-  device.lastHeartbeat = { timestamp, status };
-  device.lastHeartbeatReceivedAt = receivedAt;
-  return device;
+  return store.recordHeartbeat(device, timestamp, status, receivedAt);
 }
 
 export function getConnectivityStatus(device, currentTime = now()) {

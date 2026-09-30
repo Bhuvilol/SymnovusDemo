@@ -8,7 +8,8 @@ const DEVICE_IDS = [
   'device-05',
 ];
 const HEARTBEAT_INTERVAL_MS = 5_000;
-const backendUrl = 'http://localhost:3000';
+const backendUrl = process.env.BACKEND_URL ?? `http://localhost:${Number(process.env.PORT) || 3000}`;
+const shouldRegisterDevices = process.env.REGISTER_DEVICES === 'true';
 const devices = new Map(DEVICE_IDS.map((id) => [id, {
   id,
   timer: null,
@@ -58,8 +59,36 @@ async function sendHeartbeat(device) {
   }
 }
 
+async function registerDevices() {
+  for (const id of DEVICE_IDS) {
+    const name = `Lab Device ${id.slice('device-'.length)}`;
+
+    try {
+      const response = await fetch(`${backendUrl}/devices`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, name }),
+      });
+
+      if (response.status === 201) {
+        console.log(`[${id}] registered`);
+      } else if (response.status === 409) {
+        console.log(`[${id}] already registered`);
+      } else {
+        console.error(`[${id}] registration failed: HTTP ${response.status}`);
+      }
+    } catch (error) {
+      console.error(`[${id}] registration request failed: ${error.message}`);
+    }
+  }
+}
+
 console.log(`Sending heartbeats to ${backendUrl} every ${HEARTBEAT_INTERVAL_MS / 1_000} seconds.`);
-console.log('Devices must already be registered; the simulator will not register them.');
+if (shouldRegisterDevices) {
+  await registerDevices();
+} else {
+  console.log('Devices must already be registered; set REGISTER_DEVICES=true to register them automatically.');
+}
 console.log('Commands:');
 console.log('  stop <device-id>   Stop a device');
 console.log('  start <device-id>  Resume a stopped device');

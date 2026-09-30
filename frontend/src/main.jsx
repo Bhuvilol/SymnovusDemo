@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { fetchFleet, registerDevice, sendHeartbeat } from './api.js';
+import { fetchFleet, registerDevice, removeDevice, sendHeartbeat } from './api.js';
 import './style.css';
 
 const POLL_INTERVAL_MS = 5_000;
@@ -57,6 +57,8 @@ function App() {
   const [registrationError, setRegistrationError] = useState('');
   const [notice, setNotice] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
+  const [removingIds, setRemovingIds] = useState(() => new Set());
+  const [removalMessage, setRemovalMessage] = useState(null);
   const [runningSimulators, setRunningSimulators] = useState({});
   const [simulatorErrors, setSimulatorErrors] = useState({});
   const simulatorTimers = useRef(new Map());
@@ -105,6 +107,10 @@ function App() {
       await sendHeartbeat(deviceId);
       setSimulatorErrors((current) => ({ ...current, [deviceId]: '' }));
     } catch (error) {
+      // A request still in flight when its simulator was stopped (for example, because
+      // the device was removed) should not leave an error on a later device with this ID.
+      if (!simulatorTimers.current.has(deviceId)) return;
+
       const message = error.status === 404
         ? `${deviceId} is not registered. Register it here; retries continue every 5 seconds.`
         : error.message;
@@ -133,6 +139,45 @@ function App() {
     window.clearInterval(timer);
     simulatorTimers.current.delete(deviceId);
     setRunningSimulators((current) => ({ ...current, [deviceId]: false }));
+  }
+
+  // Stop browser heartbeats for devices that are no longer registered (for example,
+  // removed here or from another tab) so hidden timers do not keep sending.
+  useEffect(() => {
+    const registeredIds = new Set(devices.map((device) => device.id));
+    for (const deviceId of simulatorTimers.current.keys()) {
+      if (!registeredIds.has(deviceId)) {
+        stopSimulator(deviceId);
+        setSimulatorErrors((current) => ({ ...current, [deviceId]: '' }));
+      }
+    }
+  }, [devices]);
+
+  async function handleRemoveDevice(device) {
+    if (!window.confirm(`Remove ${device.id} (${device.name}) from the fleet?`)) return;
+
+    stopSimulator(device.id);
+    setRemovalMessage(null);
+    setRemovingIds((current) => new Set(current).add(device.id));
+
+    try {
+      await removeDevice(device.id);
+      setRemovalMessage({ type: 'success', text: `${device.name} removed (${device.id}).` });
+    } catch (error) {
+      if (error.status === 404) {
+        setRemovalMessage({ type: 'success', text: `${device.id} was already removed.` });
+      } else {
+        setRemovalMessage({ type: 'error', text: error.message });
+      }
+    } finally {
+      setSimulatorErrors((current) => ({ ...current, [device.id]: '' }));
+      setRemovingIds((current) => {
+        const next = new Set(current);
+        next.delete(device.id);
+        return next;
+      });
+      await refreshFleet();
+    }
   }
 
   function startAllSimulators() {
@@ -230,17 +275,18 @@ function App() {
                 <th scope="col">Name</th>
                 <th scope="col">Status</th>
                 <th scope="col">Last heartbeat</th>
+                <th scope="col"><span className="visually-hidden">Actions</span></th>
               </tr>
             </thead>
             <tbody>
               {!hasLoaded && (
-                <tr><td className="table-message" colSpan="4">Loading fleet…</td></tr>
+                <tr><td className="table-message" colSpan="5">Loading fleet…</td></tr>
               )}
               {hasLoaded && devices.length === 0 && !pageError && (
-                <tr><td className="table-message" colSpan="4">No devices registered yet.</td></tr>
+                <tr><td className="table-message" colSpan="5">No devices registered yet.</td></tr>
               )}
               {hasLoaded && devices.length === 0 && pageError && (
-                <tr><td className="table-message" colSpan="4">Fleet data is unavailable.</td></tr>
+                <tr><td className="table-message" colSpan="5">Fleet data is unavailable.</td></tr>
               )}
               {devices.map((device) => (
                 <tr key={device.id}>
@@ -248,12 +294,31 @@ function App() {
                   <td>{device.name}</td>
                   <td><StatusLabel status={device.status} /></td>
                   <td className="heartbeat-time">{formatHeartbeat(device.last_heartbeat)}</td>
+                  <td className="row-actions">
+                    <button
+                      className="button button--secondary button--compact button--danger"
+                      type="button"
+                      onClick={() => void handleRemoveDevice(device)}
+                      disabled={removingIds.has(device.id)}
+                      aria-label={`Remove ${device.id}`}
+                    >
+                      {removingIds.has(device.id) ? 'Removing…' : 'Remove'}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="poll-note">Refreshes automatically every 5 seconds.</p>
+        {removalMessage && (
+          <p
+            className={`form-message ${removalMessage.type === 'error' ? 'form-message--error' : 'form-message--success'}`}
+            role={removalMessage.type === 'error' ? 'alert' : 'status'}
+          >
+            {removalMessage.text}
+          </p>
+        )}
+        <p className="poll-note">Refreshes automatically every 5 seconds. Removing a device deletes it from the backend.</p>
       </section>
 
       <section className="register-section" aria-labelledby="register-heading">

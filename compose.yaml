@@ -1,0 +1,49 @@
+# docker compose up --build              backend + dashboard
+# docker compose run --rm simulator      interactive five-device simulator
+# docker compose run --rm test           backend test suite
+
+name: fleet-monitor
+
+services:
+  backend:
+    build:
+      context: .
+      target: backend
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/summary"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  frontend:
+    build:
+      context: .
+      target: frontend
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  simulator:
+    build:
+      context: .
+      target: simulator
+    profiles: ["tools"]
+    stdin_open: true
+    tty: true
+    environment:
+      BACKEND_URL: http://backend:3000
+      REGISTER_DEVICES: "true"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  test:
+    build:
+      context: .
+      target: test
+    profiles: ["tools"]

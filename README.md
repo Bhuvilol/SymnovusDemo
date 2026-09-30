@@ -2,23 +2,25 @@
 
 A small fleet monitoring application. Registered devices periodically send heartbeats to an Express backend. The backend determines whether each device is `ONLINE` or `OFFLINE` from when it received the heartbeat, and the React dashboard displays the current fleet state. The dashboard can simulate heartbeats for registered devices, and a Node.js command-line simulator is also available.
 
+**Live deployment:** <https://fleet-monitor-opal.vercel.app/> (Vercel, with Upstash Redis storage). See [Deploy to Vercel](#deploy-to-vercel).
+
 ## Architecture
 
 ```text
 React Dashboard + Browser Simulator
        |
        v
-Express Backend
+Express Backend  (local: Node server; Vercel: serverless function)
        |
        v
-In-Memory Device Store
+Device Store     (local: in-memory; Vercel: Upstash Redis)
 
-CLI Simulator ---> Express Backend
+CLI Simulator ---> Express Backend  (local or deployed, via BACKEND_URL)
 ```
 
 - **Backend:** Node.js and Express
 - **Frontend:** React and Vite
-- **Storage:** In-memory device store; no database
+- **Storage:** In-memory device store locally; Upstash Redis when deployed to Vercel
 - **Simulator:** Node.js
 - **Tests:** Node.js built-in test runner
 
@@ -26,8 +28,8 @@ CLI Simulator ---> Express Backend
 
 ```text
 backend/
-  src/                 Express app, server, clock, and device store
-  test/                Backend API tests
+  src/                 Express app, server, clock, and device stores (memory, Redis)
+  test/                Backend API and store tests
   test-support/        Isolated test server fixture
 frontend/
   src/                 React dashboard, API helper, and styles
@@ -35,6 +37,11 @@ frontend/
   vite.config.js
 simulator/
   src/index.js         Five-device heartbeat simulator and CLI
+api/index.js           Vercel serverless entry point for the Express app
+vercel.json            Vercel build output and API rewrites
+Dockerfile             Images for backend, dashboard (nginx), simulator, and tests
+compose.yaml           Docker Compose services
+docker/nginx.conf      Serves the dashboard and proxies the API to the backend
 package.json           Workspace scripts
 README.md
 ```
@@ -43,7 +50,34 @@ README.md
 
 - Node.js 22.12.0 or newer, as specified by the root `package.json`
 - npm
-- No database is required
+- No database is required for local development
+- Or, instead of Node.js and npm: Docker with Docker Compose (see [Run with Docker](#run-with-docker))
+
+## Run with Docker
+
+The quickest way to evaluate the project. Only Docker is needed; nothing else has to be installed.
+
+```bash
+docker compose up --build
+```
+
+This builds and starts the backend on <http://localhost:3000/> and the dashboard on <http://localhost:5173/>. The dashboard is the production build served by nginx, which forwards `/devices` and `/summary` to the backend container.
+
+In a second terminal, start the interactive five-device simulator:
+
+```bash
+docker compose run --rm simulator
+```
+
+In Docker, the simulator registers `device-01` to `device-05` itself (devices that already exist are skipped), then sends heartbeats every five seconds. Type `stop device-03`, watch it turn `OFFLINE` in the dashboard about 30 seconds later, then type `start device-03`. Type `exit` or press Ctrl+C to leave.
+
+Run the backend test suite in a container:
+
+```bash
+docker compose run --rm test
+```
+
+Stop everything with `docker compose down`. If ports 3000 or 5173 are already in use, choose others, e.g. `BACKEND_PORT=3100 FRONTEND_PORT=5273 docker compose up --build`. Use the same variables for later `docker compose` commands in that terminal, so the running containers are reused rather than recreated. The Docker backend uses in-memory storage, so `docker compose down` or a backend restart clears the fleet.
 
 ## Install
 
@@ -84,6 +118,8 @@ The command-line simulator is also available and continues to simulate the five 
 ```bash
 npm run simulator
 ```
+
+The simulator sends to `http://localhost:3000` by default. If the backend runs on another port, set the same `PORT` (for example, `PORT=4000 npm run simulator`), or set `BACKEND_URL` to a full URL. Set `REGISTER_DEVICES=true` to have the simulator register the five devices before it starts (existing devices are skipped); the Docker simulator does this by default.
 
 Available commands:
 
@@ -132,6 +168,16 @@ Returns an array of all registered devices. Each public device representation co
 
 Returns the same public device representation for one device. An unknown device returns `404 Not Found`.
 
+### `DELETE /devices/:id`
+
+Removes a device and its heartbeat state:
+
+```bash
+curl -X DELETE http://localhost:3000/devices/device-01
+```
+
+Returns `204 No Content`. An unknown or already removed device returns `404 Not Found`. After removal the device no longer appears in `GET /devices` or `/summary`, its heartbeats return `404`, and its ID can be registered again. A heartbeat that is in flight while the device is removed cannot bring it back: in Redis the heartbeat is written by a script that only updates devices that still exist.
+
 ### `GET /summary`
 
 Returns counts calculated from the current device state:
@@ -154,7 +200,7 @@ Returns counts calculated from the current device state:
 
 ## Dashboard behavior
 
-The dashboard shows fleet summary counts and the device list, including each device's latest heartbeat. It supports automatic device registration, manual refresh, and browser simulator controls for all registered devices. A local clock at the top updates every second as a tester aid; it does not determine device status. The dashboard polls the backend every five seconds and displays backend-provided status and errors when API requests fail.
+The dashboard shows fleet summary counts and the device list, including each device's latest heartbeat. It supports automatic device registration, removal (a **Remove** button on each device row, after a confirmation), manual refresh, and browser simulator controls for all registered devices. Removing a device stops its browser simulator; if a device is removed elsewhere (another tab, the API), the dashboard stops its simulator on the next poll. A local clock at the top updates every second as a tester aid; it does not determine device status. The dashboard polls the backend every five seconds and displays backend-provided status and errors when API requests fail.
 
 ## Tests and build
 
@@ -164,7 +210,7 @@ Run the backend tests with Node.js's built-in test runner:
 npm test
 ```
 
-The tests cover registration, validation, duplicate registration, heartbeat handling, unknown devices, device list/detail and summary responses, the 30-second boundary and 31-second offline transition, and server receipt time versus the client timestamp.
+The tests cover registration, validation, duplicate registration, heartbeat handling, unknown devices, device list/detail and summary responses, device removal, the 30-second boundary and 31-second offline transition, and server receipt time versus the client timestamp. The Redis store is tested against an in-memory fake client, so no Redis connection is needed; the heartbeat-after-removal script was also checked against the live Upstash database.
 
 Build the production frontend bundle with:
 
@@ -172,23 +218,61 @@ Build the production frontend bundle with:
 npm run build:frontend
 ```
 
+## Deploy to Vercel
+
+Live deployment: <https://fleet-monitor-opal.vercel.app/>
+
+| Item | Value |
+|---|---|
+| Vercel project | `fleet-monitor` (team `bhuvilols-projects`) |
+| Production URL | <https://fleet-monitor-opal.vercel.app/> (`fleet-monitor.vercel.app` is owned by another account) |
+| Storage | Upstash Redis database `fleet-monitor-redis` (free plan), connected to Production, Preview, and Development |
+| Environment variables | `KV_REST_API_URL`, `KV_REST_API_TOKEN` (set by the Upstash integration) |
+| Redis keys | `fleet:devices` (hash of devices by ID), `fleet:sequence` (registration order counter) |
+
+The dashboard is served as a static site and the Express app runs as a Vercel serverless function (`api/index.js`), on the same domain, so the dashboard's relative API paths work without CORS. `vercel.json` builds `frontend/dist` and rewrites `/devices`, `/devices/*`, and `/summary` to the function.
+
+Serverless instances do not share memory, so the deployment stores devices in Redis. The backend picks the store at startup: Redis when `KV_REST_API_URL`/`KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`) are set, otherwise in-memory. Registration uses `HSETNX`, so duplicate IDs are rejected atomically even across concurrent instances; removal uses `HDEL`, and heartbeats are written by a small Lua script that only updates devices that still exist. Connectivity status still uses the server's heartbeat receipt time.
+
+To set up a new deployment:
+
+1. Install the CLI and log in: `npm i -g vercel`, then `vercel login`.
+2. From the repository root, run `vercel link` to create or link the project (`.vercel/` is git-ignored).
+3. In the Vercel dashboard, open the project, choose **Storage → Create Database → Upstash for Redis**, accept the terms, and pick the free plan. If the database is not connected to the project afterwards, connect it with `vercel integration resource connect <database-name> <project-name> --yes`. Check with `vercel env ls`.
+4. Deploy with `vercel deploy --prod`.
+
+Deployments are manual: rerun `vercel deploy --prod` after changes, or run `vercel git connect` to deploy automatically on every push to GitHub.
+
+To drive the deployed fleet from the command-line simulator:
+
+```bash
+BACKEND_URL=https://fleet-monitor-opal.vercel.app npm run simulator
+```
+
 ## Assumptions and limitations
 
-- In-memory storage is intentional; restarting the backend clears all registered devices and heartbeat state.
-- State is local to one backend process and is not shared across multiple instances.
+- Local development uses in-memory storage intentionally; restarting the backend clears all registered devices and heartbeat state, and state is not shared across processes. The Vercel deployment uses Redis so state is shared across serverless instances.
 - Authentication and authorization are not implemented.
-- Local defaults are fixed for this assessment: backend port `3000`, Vite dashboard port `5173`, and five command-line simulator device IDs. Browser simulator controls use all registered devices. The backend port can be overridden with `PORT`.
-- A simulator device must be registered before its heartbeat can succeed.
+- Local defaults are fixed for this assessment: backend port `3000`, Vite dashboard port `5173`, and five command-line simulator device IDs. Browser simulator controls use all registered devices. The backend port can be overridden with `PORT`; pass the same `PORT` (or a full `BACKEND_URL`) to the dashboard and CLI simulator so they reach it.
+- The development backend reloads only when files in `backend/src` change. Any restart clears the in-memory fleet.
+- A simulator device must be registered before its heartbeat can succeed, unless the simulator is started with `REGISTER_DEVICES=true`.
 - The heartbeat `status` is device-reported information; it is separate from fleet connectivity status.
-- There is no production deployment configuration.
+- The browser simulator only runs while the dashboard is open, and the CLI simulator runs locally; neither is a hosted process.
+- The browser simulator tracks only heartbeats it sends itself, so devices driven by the CLI simulator show `STOPPED` in the browser simulator list while their fleet status is `ONLINE`.
+- At phone width, the device table scrolls horizontally inside its container; the "Last heartbeat" column is off-screen until scrolled.
+- The dashboard has no favicon, so browsers log a harmless `404` for `/favicon.ico`.
 
 ## With one more day
 
-- Add persistent storage and authentication/authorization.
+- Add authentication/authorization.
 - Add stronger integration and load testing, plus more operational observability.
-- Prepare deployment and containerization configuration.
 - Extend device metrics beyond heartbeat state.
 
 ## Verification
 
-The application was manually verified end to end: five-device heartbeat simulation, the 30-second `ONLINE` to `OFFLINE` transition and recovery, dashboard polling, UI registration and duplicate/error handling, and dashboard behavior during backend outage and recovery. The automated backend suite passed (7 tests), and the frontend production build succeeded.
+- **Automated tests:** `npm test` passes all 12 tests (9 API tests plus 3 Redis store tests), and the frontend production build succeeds.
+- **Local, three terminals:** backend, dashboard, and CLI simulator were run side by side. Five devices were registered and simulated; `stop device-03` made it `OFFLINE` after the 30-second timeout (about 33 seconds including polling) while the other four stayed `ONLINE`, and `start device-03` brought it back within 2 seconds.
+- **Docker:** all images build; `docker compose run --rm test` passes 12/12; the simulator container registers the five devices and `stop device-03` produces 4 online / 1 offline through the nginx proxy; the browser tests pass 32 of 33 against the containerized dashboard (the only errors are the ones the tests trigger on purpose); stopping the backend container shuts it down cleanly on `SIGTERM`, the dashboard proxy returns `502` during the outage, and the dashboard recovers after a restart.
+- **Browser tests:** the dashboard was driven in Chrome with Playwright, both locally and on the live deployment, with 32 of 33 checks passing in each. The checks covered page load, summary counts, the local clock, manual refresh and 5-second polling, sequential **Add device**, per-device and **Start all**/**Stop all** simulator controls, the 30-second timeout and recovery, the backend-outage banner and **Try again**, registration errors, the `409` retry path, and phone-width layout. The only failed check was "no console errors", caused by the missing favicon and by errors the outage tests triggered on purpose.
+- **Device removal:** a separate browser test (13 checks) passed locally, in Docker, and on the live deployment: cancel keeps the device, confirm sends `DELETE` (`204`) and removes it from the table, simulator list, and summary, no heartbeats are sent afterwards, a device removed through the API is dropped on the next poll, and a re-added device with the same ID shows no stale error. On the live deployment, 5 rounds of 15 concurrent heartbeats racing a removal never recreated the device.
+- **Live API:** registration, duplicate (`409`), invalid JSON (`400`), heartbeat, and unknown device (`404`) responses match local behavior, and 20 concurrent reads returned consistent data from Redis across serverless instances. Test devices were removed from the live database afterwards.
