@@ -1,0 +1,11 @@
+#!/bin/sh
+
+message_file=$1
+awk '
+  /^[[:space:]]*#/ || NF == 0 { next }
+  NF < 8 || NF > 10 {
+    printf "Commit message line %d has %d words; expected 8-10.\n", NR, NF > "/dev/stderr"
+    invalid = 1
+  }
+  END { exit invalid }
+' "$message_file"

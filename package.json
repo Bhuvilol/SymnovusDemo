@@ -1,0 +1,20 @@
+{
+  "name": "mini-device-fleet-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "workspaces": [
+    "backend",
+    "frontend",
+    "simulator"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev --workspace @fleet/backend",
+    "dev:frontend": "npm run dev --workspace @fleet/frontend",
+    "build:frontend": "npm run build --workspace @fleet/frontend",
+    "test": "node --test"
+  }
+}
