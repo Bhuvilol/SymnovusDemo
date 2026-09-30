@@ -1,0 +1,396 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #171b19;
+  background: #fbfcfb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+
+  --ink: #171b19;
+  --muted: #5e6662;
+  --line: #dce1dd;
+  --paper: #ffffff;
+  --accent: #176b56;
+  --accent-soft: #e8f2ee;
+  --offline: #616864;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.page-shell {
+  width: min(100% - 48px, 1120px);
+  margin: 0 auto;
+  padding: 64px 0 88px;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 44px;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 10px;
+  font-size: clamp(2rem, 4vw, 2.65rem);
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1.1;
+}
+
+.page-description,
+.section-heading p {
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.button {
+  min-height: 44px;
+  padding: 0 17px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.button--primary {
+  color: #fff;
+  background: var(--accent);
+}
+
+.button--primary:hover:not(:disabled) {
+  background: #105541;
+}
+
+.button--secondary {
+  color: var(--ink);
+  border-color: #bfc7c2;
+  background: var(--paper);
+}
+
+.button--secondary:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.message {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: -20px 0 32px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  line-height: 1.5;
+}
+
+.message--error,
+.form-message--error {
+  color: #8a2d2d;
+}
+
+.text-button {
+  flex: 0 0 auto;
+  padding: 4px 0;
+  border: 0;
+  color: var(--ink);
+  background: transparent;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.summary-section {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 25px 0 27px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.summary-metric {
+  display: grid;
+  gap: 8px;
+  padding-left: 26px;
+  border-left: 1px solid var(--line);
+}
+
+.summary-metric:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.summary-label {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.summary-metric strong {
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.devices-section {
+  margin-top: 46px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+h2 {
+  margin-bottom: 6px;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.section-heading p {
+  font-size: 0.9rem;
+}
+
+.device-count {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+th,
+td {
+  padding: 16px 18px;
+  border-bottom: 1px solid #e8ebe9;
+  white-space: nowrap;
+}
+
+th:first-child,
+td:first-child {
+  padding-left: 20px;
+}
+
+th:last-child,
+td:last-child {
+  padding-right: 20px;
+}
+
+th {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.035em;
+}
+
+td {
+  font-size: 0.9rem;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.device-id {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.heartbeat-time {
+  color: #353c38;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.77rem;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+}
+
+.status-label--online {
+  color: var(--accent);
+}
+
+.status-label--offline {
+  color: var(--offline);
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.table-message {
+  padding: 30px 20px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.poll-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.register-section {
+  margin-top: 48px;
+  padding-top: 27px;
+  border-top: 1px solid var(--line);
+}
+
+.register-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1.2fr) auto;
+  align-items: end;
+  gap: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.field input {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid #bfc7c2;
+  border-radius: 4px;
+  outline: none;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.field input::placeholder {
+  color: #6a716d;
+}
+
+.field input:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.form-message {
+  margin: 13px 0 0;
+  font-size: 0.88rem;
+}
+
+.form-message--success {
+  color: var(--accent);
+}
+
+@media (max-width: 680px) {
+  .page-shell {
+    width: min(100% - 32px, 1120px);
+    padding-top: 36px;
+  }
+
+  .page-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 32px;
+  }
+
+  .summary-section {
+    padding: 20px 0;
+  }
+
+  .summary-metric {
+    gap: 7px;
+    padding-left: 14px;
+  }
+
+  .summary-metric strong {
+    font-size: 1.65rem;
+  }
+
+  .devices-section {
+    margin-top: 36px;
+  }
+
+  th,
+  td {
+    padding: 14px 12px;
+  }
+
+  th:first-child,
+  td:first-child {
+    padding-left: 12px;
+  }
+
+  .register-form {
+    grid-template-columns: 1fr;
+  }
+
+  .register-form .button {
+    justify-self: start;
+  }
+}
